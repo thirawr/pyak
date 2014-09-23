@@ -56,7 +56,7 @@ class Comment:
     def downvote(self):
         if self.liked == 0:
             self.likes -= 1
-            self.liked += 1
+            self.liked -= 1
             return self.client.downvote_comment(self.comment_id)
 
     def report(self):
