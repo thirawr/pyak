@@ -1,4 +1,4 @@
-from pyak import util
+import pyak.util as util
 
 class Comment:
     """
