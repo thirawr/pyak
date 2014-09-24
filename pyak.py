@@ -136,7 +136,7 @@ class Yak:
 
 class Yakker:
     base_url = "http://yikyakapp.com/api/"
-    user_agent = "android-async-http/1.4.4 (http://loopj.com/android-async-http)"
+    user_agent = "Mozilla/5.0 (Linux; Android 4.0.4; Galaxy Nexus Build/IMM76B) AppleWebKit/535.19 (KHTML, like Gecko) Chrome/18.0.1025.133 Mobile Safari/535.19"
     
     def __init__(self, user_id=None, location=None, force_register=False):
         if location is None:
