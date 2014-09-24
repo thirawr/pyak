@@ -6,143 +6,17 @@ import os
 from hashlib import sha1
 from hashlib import md5
 
+from src.location import Location
+from src.Yak import Yak
+from src.comment import Comment
+from src.peekLocation import PeekLocation
+
 import requests
 
 
-def parse_time(timestr):
-    format = "%Y-%m-%d %H:%M:%S"
-    return time.mktime(time.strptime(timestr, format))
-
-
-class Location:
-    def __init__(self, latitude, longitude, delta=None):
-        self.latitude = latitude
-        self.longitude = longitude
-        if delta is None:
-            delta = "0.030000"
-        self.delta = delta
-
-    def __str__(self):
-        return "Location(%s, %s)" % (self.latitude, self.longitude)
-
-
-class PeekLocation:
-    def __init__(self, raw):
-        self.id = raw['peekID']
-        self.can_submit = bool(raw['canSubmit'])
-        self.name = raw['location']
-        lat = raw['latitude']
-        lon = raw['longitude']
-        d = raw['delta']
-        self.location = Location(lat, lon, d)
-
-
-class Comment:
-    def __init__(self, raw, message_id, client):
-        self.client = client
-        self.message_id = message_id
-        self.comment_id = raw["commentID"]
-        self.comment = raw["comment"]
-        self.time = parse_time(raw["time"])
-        self.likes = int(raw["numberOfLikes"])
-        self.poster_id = raw["posterID"]
-        self.liked = int(raw["liked"])
-
-        self.message_id = self.message_id.replace('\\', '')
-
-    def upvote(self):
-        if self.liked == 0:
-            self.likes += 1
-            self.liked += 1
-            return self.client.upvote_comment(self.comment_id)
-
-    def downvote(self):
-        if self.liked == 0:
-            self.likes -= 1
-            self.liked -= 1
-            return self.client.downvote_comment(self.comment_id)
-
-    def report(self):
-        return self.client.report_comment(self.comment_id, self.message_id)
-
-    def delete(self):
-        if self.poster_id == self.client.id:
-            return self.client.delete_comment(self.comment_id, self.message_id)
-
-    def reply(self, comment):
-        return self.client.post_comment(self.message_id, comment)
-
-    def print_comment(self):
-        my_action = ""
-        if self.liked > 0:
-            my_action = "^"
-        elif self.liked < 0:
-            my_action = "v"
-        print "%s(%s) %s" % (my_action, self.likes, self.comment)
-
-
-class Yak:
-    def __init__(self, raw, client):
-        self.client = client
-        self.poster_id = raw["posterID"]
-        self.hide_pin = bool(int(raw["hidePin"]))
-        self.message_id = raw["messageID"]
-        self.delivery_id = raw["deliveryID"]
-        self.longitude = raw["longitude"]
-        self.comments = int(raw["comments"])
-        self.time = parse_time(raw["time"])
-        self.latitude = raw["latitude"]
-        self.likes = int(raw["numberOfLikes"])
-        self.message = raw["message"]
-        self.type = raw["type"]
-        self.liked = int(raw["liked"])
-        self.reyaked = raw["reyaked"]
-
-        # Yaks don't always have a handle
-        try:
-            self.handle = raw["handle"]
-        except KeyError:
-            self.handle = None
-
-        #For some reason this seems necessary
-        self.message_id = self.message_id.replace('\\', '')
-
-    def upvote(self):
-        if self.liked == 0:
-            self.liked += 1
-            self.likes += 1
-            return self.client.upvote_yak(self.message_id)
-
-    def downvote(self):
-        if self.liked == 0:
-            self.liked -= 1
-            self.likes -= 1
-            return self.client.downvote_yak(self.message_id)
-
-    def report(self):
-        return self.client.report_yak(self.message_id)
-
-    def delete(self):
-        if self.poster_id == self.client.id:
-            return self.client.delete_yak(self.message_id)
-
-    def add_comment(self, comment):
-        return self.client.post_comment(self.message_id, comment)
-
-    def get_comments(self):
-        return self.client.get_comments(self.message_id)
-
-    def print_yak(self):
-        if self.handle is not None:
-            print "%s:" % self.handle
-        print self.message
-        print "%s likes, %s comments. posted %s at %s %s" % (
-        self.likes, self.comments, self.time, self.latitude, self.longitude)
-
-
 class Yakker:
-    base_url = "http://yikyakapp.com/api/"
-    user_agent = "android-async-http/1.4.4 (http://loopj.com/android-async-http)"
+    BASE_URL = "http://yikyakapp.com/api/"
+    USER_AGENT = "android-async-http/1.4.4 (http://loopj.com/android-async-http)"
 
     def __init__(self, user_id=None, location=None, force_register=False):
         if location is None:
@@ -179,7 +53,7 @@ class Yakker:
         # The salt is just the current time in seconds since epoch
         salt = str(int(time.time()))
 
-        #The message to be signed is essentially the request, with parameters sorted
+        # The message to be signed is essentially the request, with parameters sorted
         msg = "/api/" + page
         sorted_params = params.keys()
         sorted_params.sort()
@@ -187,11 +61,11 @@ class Yakker:
             msg += "?"
         for param in sorted_params:
             msg += "%s=%s&" % (param, params[param])
-        #Chop off last "&"
+        # Chop off last "&"
         if len(params) > 0:
             msg = msg[:-1]
 
-        #the salt is just appended directly
+        # the salt is just appended directly
         msg += salt
 
         #Calculate the signature
@@ -202,27 +76,27 @@ class Yakker:
 
 
     def get(self, page, params):
-        url = self.base_url + page
+        url = self.BASE_URL + page
 
         hash, salt = self.sign_request(page, params)
         params['hash'] = hash
         params['salt'] = salt
 
         headers = {
-            "User-Agent": self.user_agent,
+            "User-Agent": self.USER_AGENT,
             "Accept-Encoding": "gzip",
         }
 
         return requests.get(url, params=params, headers=headers)
 
     def post(self, page, params):
-        url = self.base_url + page
+        url = self.BASE_URL + page
 
         hash, salt = self.sign_request(page, params)
         getparams = {'hash': hash, 'salt': salt}
 
         headers = {
-            "User-Agent": self.user_agent,
+            "User-Agent": self.USER_AGENT,
             "Accept-Encoding": "gzip",
         }
 
