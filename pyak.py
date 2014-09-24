@@ -104,7 +104,7 @@ class Yak:
         except KeyError:
             self.handle = None
 
-        # For some reason this seems necessary
+        #For some reason this seems necessary
         self.message_id = self.message_id.replace('\\', '')
 
     def upvote(self):
@@ -137,7 +137,7 @@ class Yak:
             print "%s:" % self.handle
         print self.message
         print "%s likes, %s comments. posted %s at %s %s" % (
-            self.likes, self.comments, self.time, self.latitude, self.longitude)
+        self.likes, self.comments, self.time, self.latitude, self.longitude)
 
 
 class Yakker:
@@ -179,7 +179,7 @@ class Yakker:
         # The salt is just the current time in seconds since epoch
         salt = str(int(time.time()))
 
-        # The message to be signed is essentially the request, with parameters sorted
+        #The message to be signed is essentially the request, with parameters sorted
         msg = "/api/" + page
         sorted_params = params.keys()
         sorted_params.sort()
@@ -187,11 +187,11 @@ class Yakker:
             msg += "?"
         for param in sorted_params:
             msg += "%s=%s&" % (param, params[param])
-        # Chop off last "&"
+        #Chop off last "&"
         if len(params) > 0:
             msg = msg[:-1]
 
-        # the salt is just appended directly
+        #the salt is just appended directly
         msg += salt
 
         #Calculate the signature
