@@ -6,145 +6,26 @@ import os
 from hashlib import sha1
 from hashlib import md5
 
+from pyak.location import Location
+from pyak.yak import Yak
+from pyak.comment import Comment
+from pyak.peeklocation import PeekLocation
+
 import requests
 
 
-def parse_time(timestr):
-    format = "%Y-%m-%d %H:%M:%S"
-    return time.mktime(time.strptime(timestr, format))
-
-
-class Location:
-    def __init__(self, latitude, longitude, delta=None):
-        self.latitude = latitude
-        self.longitude = longitude
-        if delta is None:
-            delta = "0.030000"
-        self.delta = delta
-
-    def __str__(self):
-        return "Location(%s, %s)" % (self.latitude, self.longitude)
-
-
-class PeekLocation:
-    def __init__(self, raw):
-        self.id = raw['peekID']
-        self.can_submit = bool(raw['canSubmit'])
-        self.name = raw['location']
-        lat = raw['latitude']
-        lon = raw['longitude']
-        d = raw['delta']
-        self.location = Location(lat, lon, d)
-
-
-class Comment:
-    def __init__(self, raw, message_id, client):
-        self.client = client
-        self.message_id = message_id
-        self.comment_id = raw["commentID"]
-        self.comment = raw["comment"]
-        self.time = parse_time(raw["time"])
-        self.likes = int(raw["numberOfLikes"])
-        self.poster_id = raw["posterID"]
-        self.liked = int(raw["liked"])
-
-        self.message_id = self.message_id.replace('\\', '')
-
-    def upvote(self):
-        if self.liked == 0:
-            self.likes += 1
-            self.liked += 1
-            return self.client.upvote_comment(self.comment_id)
-
-    def downvote(self):
-        if self.liked == 0:
-            self.likes -= 1
-            self.liked -= 1
-            return self.client.downvote_comment(self.comment_id)
-
-    def report(self):
-        return self.client.report_comment(self.comment_id, self.message_id)
-
-    def delete(self):
-        if self.poster_id == self.client.id:
-            return self.client.delete_comment(self.comment_id, self.message_id)
-
-    def reply(self, comment):
-        return self.client.post_comment(self.message_id, comment)
-
-    def print_comment(self):
-        my_action = ""
-        if self.liked > 0:
-            my_action = "^"
-        elif self.liked < 0:
-            my_action = "v"
-        print "%s(%s) %s" % (my_action, self.likes, self.comment)
-
-
-class Yak:
-    def __init__(self, raw, client):
-        self.client = client
-        self.poster_id = raw["posterID"]
-        self.hide_pin = bool(int(raw["hidePin"]))
-        self.message_id = raw["messageID"]
-        self.delivery_id = raw["deliveryID"]
-        self.longitude = raw["longitude"]
-        self.comments = int(raw["comments"])
-        self.time = parse_time(raw["time"])
-        self.latitude = raw["latitude"]
-        self.likes = int(raw["numberOfLikes"])
-        self.message = raw["message"]
-        self.type = raw["type"]
-        self.liked = int(raw["liked"])
-        self.reyaked = raw["reyaked"]
-
-        # Yaks don't always have a handle
-        try:
-            self.handle = raw["handle"]
-        except KeyError:
-            self.handle = None
-
-        #For some reason this seems necessary
-        self.message_id = self.message_id.replace('\\', '')
-
-    def upvote(self):
-        if self.liked == 0:
-            self.liked += 1
-            self.likes += 1
-            return self.client.upvote_yak(self.message_id)
-
-    def downvote(self):
-        if self.liked == 0:
-            self.liked -= 1
-            self.likes -= 1
-            return self.client.downvote_yak(self.message_id)
-
-    def report(self):
-        return self.client.report_yak(self.message_id)
-
-    def delete(self):
-        if self.poster_id == self.client.id:
-            return self.client.delete_yak(self.message_id)
-
-    def add_comment(self, comment):
-        return self.client.post_comment(self.message_id, comment)
-
-    def get_comments(self):
-        return self.client.get_comments(self.message_id)
-
-    def print_yak(self):
-        if self.handle is not None:
-            print "%s:" % self.handle
-        print self.message
-        print "%s likes, %s comments. posted %s at %s %s" % (
-            self.likes, self.comments, self.time, self.latitude, self.longitude)
-
-
 class Yakker:
-    base_url = "http://yikyakapp.com/api/"
-    user_agent = "Mozilla/5.0 (Linux; Android 4.0.4; Galaxy Nexus Build/IMM76B) AppleWebKit/535.19 (KHTML, like Gecko) Chrome/18.0.1025.133 Mobile Safari/535.19"
+    BASE_URL = "http://yikyakapp.com/api/"
+    USER_AGENT = "Mozilla/5.0 (Linux; Android 4.0.4; Galaxy Nexus Build/IMM76B) AppleWebKit/535.19 (KHTML, like Gecko) Chrome/18.0.1025.133 Mobile Safari/535.19"
 
     def __init__(self, user_id=None, location=None, force_register=False):
+        """
+
+        :param user_id:
+        :param location:
+        :param force_register:
+        :return:
+        """
         if location is None:
             location = Location('0', '0')
         self.update_location(location)
@@ -162,9 +43,18 @@ class Yakker:
         # self.update_stats()
 
     def gen_id(self):
+        """
+
+        :return:
+        """
         return md5(os.urandom(128)).hexdigest().upper()
 
     def register_id_new(self, id):
+        """
+
+        :param id:
+        :return:
+        """
         params = {
             "userID": id,
             "lat": self.location.latitude,
@@ -174,12 +64,18 @@ class Yakker:
         return result
 
     def sign_request(self, page, params):
+        """
+
+        :param page:
+        :param params:
+        :return:
+        """
         key = "35FD04E8-B7B1-45C4-9886-94A75F4A2BB4"
 
         # The salt is just the current time in seconds since epoch
         salt = str(int(time.time()))
 
-        #The message to be signed is essentially the request, with parameters sorted
+        # The message to be signed is essentially the request, with parameters sorted
         msg = "/api/" + page
         sorted_params = params.keys()
         sorted_params.sort()
@@ -187,14 +83,14 @@ class Yakker:
             msg += "?"
         for param in sorted_params:
             msg += "%s=%s&" % (param, params[param])
-        #Chop off last "&"
+        # Chop off last "&"
         if len(params) > 0:
             msg = msg[:-1]
 
-        #the salt is just appended directly
+        # the salt is just appended directly
         msg += salt
 
-        #Calculate the signature
+        # Calculate the signature
         h = hmac.new(key, msg, sha1)
         hash = base64.b64encode(h.digest())
 
@@ -202,36 +98,59 @@ class Yakker:
 
 
     def get(self, page, params):
-        url = self.base_url + page
+        """
+
+        :param page:
+        :param params:
+        :return:
+        """
+        url = self.BASE_URL + page
 
         hash, salt = self.sign_request(page, params)
         params['hash'] = hash
         params['salt'] = salt
 
         headers = {
-            "User-Agent": self.user_agent,
+            "User-Agent": self.USER_AGENT,
             "Accept-Encoding": "gzip",
         }
 
         return requests.get(url, params=params, headers=headers)
 
     def post(self, page, params):
-        url = self.base_url + page
+        """
+
+        :param page:
+        :param params:
+        :return:
+        """
+        url = self.BASE_URL + page
 
         hash, salt = self.sign_request(page, params)
         getparams = {'hash': hash, 'salt': salt}
 
         headers = {
-            "User-Agent": self.user_agent,
+            "User-Agent": self.USER_AGENT,
             "Accept-Encoding": "gzip",
         }
 
         return requests.post(url, data=params, params=getparams, headers=headers)
 
     def get_yak_list(self, page, params):
+        """
+
+        :param page:
+        :param params:
+        :return:
+        """
         return self.parse_yaks(self.get(page, params).text)
 
     def parse_yaks(self, text):
+        """
+
+        :param text:
+        :return:
+        """
         try:
             raw_yaks = json.loads(text)["messages"]
         except:
@@ -242,6 +161,12 @@ class Yakker:
         return yaks
 
     def parse_comments(self, text, message_id):
+        """
+
+        :param text:
+        :param message_id:
+        :return:
+        """
         try:
             raw_comments = json.loads(text)["comments"]
         except:
@@ -252,6 +177,11 @@ class Yakker:
         return comments
 
     def contact(self, message):
+        """
+
+        :param message:
+        :return:
+        """
         params = {
             "userID": self.id,
             "message": message
@@ -259,6 +189,11 @@ class Yakker:
         return self.get("contactUs", params)
 
     def upvote_yak(self, message_id):
+        """
+
+        :param message_id:
+        :return:
+        """
         params = {
             "userID": self.id,
             "messageID": message_id,
@@ -268,6 +203,11 @@ class Yakker:
         return self.get("likeMessage", params)
 
     def downvote_yak(self, message_id):
+        """
+
+        :param message_id:
+        :return:
+        """
         params = {
             "userID": self.id,
             "messageID": message_id,
@@ -277,6 +217,11 @@ class Yakker:
         return self.get("downvoteMessage", params)
 
     def upvote_comment(self, comment_id):
+        """
+
+        :param comment_id:
+        :return:
+        """
         params = {
             "userID": self.id,
             "commentID": comment_id,
@@ -286,6 +231,11 @@ class Yakker:
         return self.get("likeComment", params)
 
     def downvote_comment(self, comment_id):
+        """
+
+        :param comment_id:
+        :return:
+        """
         params = {
             "userID": self.id,
             "commentID": comment_id,
@@ -295,6 +245,11 @@ class Yakker:
         return self.get("downvoteComment", params)
 
     def report_yak(self, message_id):
+        """
+
+        :param message_id:
+        :return:
+        """
         params = params = {
             "userID": self.id,
             "messageID": message_id,
@@ -304,7 +259,12 @@ class Yakker:
         return self.get("reportMessage", params)
 
     def delete_yak(self, message_id):
-        params = params = {
+        """
+
+        :param message_id:
+        :return:
+        """
+        params = {
             "userID": self.id,
             "messageID": message_id,
             "lat": self.location.latitude,
@@ -313,6 +273,12 @@ class Yakker:
         return self.get("deleteMessage2", params)
 
     def report_comment(self, comment_id, message_id):
+        """
+
+        :param comment_id:
+        :param message_id:
+        :return:
+        """
         params = {
             "userID": self.id,
             "commentID": comment_id,
@@ -323,6 +289,12 @@ class Yakker:
         return self.get("reportMessage", params)
 
     def delete_comment(self, comment_id, message_id):
+        """
+
+        :param comment_id:
+        :param message_id:
+        :return:
+        """
         params = {
             "userID": self.id,
             "commentID": comment_id,
@@ -333,6 +305,10 @@ class Yakker:
         return self.get("deleteComment", params)
 
     def get_greatest(self):
+        """
+
+        :return:
+        """
         params = {
             "userID": self.id,
             "lat": self.location.latitude,
@@ -341,6 +317,10 @@ class Yakker:
         return self.get_yak_list("getGreatest", params)
 
     def get_my_tops(self):
+        """
+
+        :return:
+        """
         params = {
             "userID": self.id,
             "lat": self.location.latitude,
@@ -349,6 +329,10 @@ class Yakker:
         return self.get_yak_list("getMyTops", params)
 
     def get_recent_replied(self):
+        """
+
+        :return:
+        """
         params = {
             "userID": self.id,
             "lat": self.location.latitude,
@@ -357,9 +341,19 @@ class Yakker:
         return self.get_yak_list("getMyRecentReplies", params)
 
     def update_location(self, location):
+        """
+
+        :param location:
+        :return:
+        """
+        # @Warning self.location is defined outside init
         self.location = location
 
     def get_my_recent_yaks(self):
+        """
+
+        :return:
+        """
         params = {
             "userID": self.id,
             "lat": self.location.latitude,
@@ -368,6 +362,10 @@ class Yakker:
         return self.get_yak_list("getMyRecentYaks", params)
 
     def get_area_tops(self):
+        """
+
+        :return:
+        """
         params = {
             "userID": self.id,
             "lat": self.location.latitude,
@@ -376,6 +374,10 @@ class Yakker:
         return self.get_yak_list("getAreaTops", params)
 
     def get_yaks(self):
+        """
+
+        :return:
+        """
         params = {
             "userID": self.id,
             "lat": self.location.latitude,
@@ -383,20 +385,32 @@ class Yakker:
         }
         return self.get_yak_list("getMessages", params)
 
-    def post_yak(self, message, showloc=False, handle=False):
+    def post_yak(self, message, show_loc=False, handle=False):
+        """
+
+        :param message:
+        :param showloc:
+        :param handle:
+        :return:
+        """
         params = {
             "userID": self.id,
             "lat": self.location.latitude,
             "long": self.location.longitude,
             "message": message,
         }
-        if not showloc:
+        if not show_loc:
             params["hidePin"] = "1"
         if handle and (self.handle is not None):
             params["hndl"] = self.handle
         return self.post("sendMessage", params)
 
     def get_comments(self, message_id):
+        """
+
+        :param message_id:
+        :return:
+        """
         params = {
             "userID": self.id,
             "messageID": message_id,
@@ -407,6 +421,12 @@ class Yakker:
         return self.parse_comments(self.get("getComments", params).text, message_id)
 
     def post_comment(self, message_id, comment):
+        """
+
+        :param message_id:
+        :param comment:
+        :return:
+        """
         params = {
             "userID": self.id,
             "messageID": message_id,
@@ -417,6 +437,10 @@ class Yakker:
         return self.post("postComment", params)
 
     def get_peek_locations(self):
+        """
+
+        :return:
+        """
         params = {
             "userID": self.id,
             "lat": self.location.latitude,
@@ -429,6 +453,10 @@ class Yakker:
         return peeks
 
     def get_featured_locations(self):
+        """
+
+        :return:
+        """
         params = {
             "userID": self.id,
             "lat": self.location.latitude,
@@ -441,6 +469,10 @@ class Yakker:
         return peeks
 
     def get_yakarma(self):
+        """
+
+        :return:
+        """
         params = {
             "userID": self.id,
             "lat": self.location.latitude,
@@ -450,6 +482,11 @@ class Yakker:
         return int(data['yakarma'])
 
     def peek(self, peek_id):
+        """
+
+        :param peek_id:
+        :return:
+        """
         if isinstance(peek_id, PeekLocation):
             peek_id = peek_id.id
 
