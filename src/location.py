@@ -21,4 +21,8 @@ class Location:
             self.delta = delta
 
     def __str__(self):
+        """
+        To String
+        :return: String representation of location
+        """
         return "Location(%s, %s)" % (self.latitude, self.longitude)
