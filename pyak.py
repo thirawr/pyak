@@ -137,7 +137,7 @@ class Yak:
             print "%s:" % self.handle
         print self.message
         print "%s likes, %s comments. posted %s at %s %s" % (
-        self.likes, self.comments, self.time, self.latitude, self.longitude)
+            self.likes, self.comments, self.time, self.latitude, self.longitude)
 
 
 class Yakker:
